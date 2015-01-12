@@ -175,7 +175,10 @@ template <typename A>
 class TableHandler
 {
 private:
+  // The RADOS object ID for the table
   std::string object_name;
+
+  // Whether this is an MDSTable subclass (i.e. has leading version field to decode)
   bool mds_table;
 
 public:
