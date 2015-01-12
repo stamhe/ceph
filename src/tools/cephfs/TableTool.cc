@@ -58,7 +58,7 @@ int TableTool::main(std::vector<const char*> &argv)
   std::string pool_name;
   r = rados.pool_reverse_lookup(pool_id, &pool_name);
   if (r < 0) {
-    derr << "Pool " << pool_id << " named in MDS map not found in RADOS!" << dendl;
+    derr << "Pool " << pool_id << " identified in MDS map not found in RADOS!" << dendl;
     return r;
   }
 
