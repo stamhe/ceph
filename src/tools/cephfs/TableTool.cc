@@ -141,38 +141,28 @@ int TableTool::main(std::vector<const char*> &argv)
 int TableTool::apply_rank_fn(int (TableTool::*fptr) (mds_rank_t, Formatter*), Formatter *f)
 {
   int r = 0;
+  std::set<mds_rank_t> apply_to_ranks;
   if (rank == MDS_RANK_NONE) {
-    std::set<mds_rank_t> in_ranks;
-    mdsmap->get_mds_set(in_ranks);
-
-    for (std::set<mds_rank_t>::iterator rank_i = in_ranks.begin();
-        rank_i != in_ranks.end(); ++rank_i)
-    {
-      if (f) {
-        std::ostringstream rank_str;
-        rank_str << *rank_i;
-        f->open_object_section(rank_str.str().c_str());
-      }
-      int rank_r = (this->*fptr)(*rank_i, f);
-      r = r ? r : rank_r;
-      if (f) {
-        f->close_section();
-      }
-    }
-
-    return r;
+    mdsmap->get_mds_set(apply_to_ranks);
   } else {
+    apply_to_ranks.insert(rank);
+  }
+
+  for (std::set<mds_rank_t>::iterator rank_i = apply_to_ranks.begin();
+      rank_i != apply_to_ranks.end(); ++rank_i) {
     if (f) {
       std::ostringstream rank_str;
-      rank_str << rank;
+      rank_str << *rank_i;
       f->open_object_section(rank_str.str().c_str());
     }
-    r = (this->*fptr)(rank, f);
+    int rank_r = (this->*fptr)(*rank_i, f);
+    r = r ? r : rank_r;
     if (f) {
       f->close_section();
     }
-    return r;
   }
+
+  return r;
 }
 
 
