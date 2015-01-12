@@ -29,10 +29,8 @@
 void TableTool::usage()
 {
   std::cout << "Usage: \n"
-    << "  cephfs-table-tool [options] <reset|show> <session|snap|inode>"
-    << "\n"
-    << "Options:\n"
-    << "  --rank=<int>      MDS rank (default: operate on all ranks)\n";
+    << "  cephfs-table-tool <all|[mds rank]> <reset|show> <session|snap|inode>"
+    << std::endl;
 
   generic_client_usage();
 }
@@ -43,18 +41,6 @@ int TableTool::main(std::vector<const char*> &argv)
   int r;
 
   dout(10) << __func__ << dendl;
-
-  // Parse --rank
-  std::vector<const char*>::iterator arg = argv.begin();
-  std::string rank_str;
-  if(ceph_argparse_witharg(argv, arg, &rank_str, "--rank", (char*)NULL)) {
-    std::string rank_err;
-    rank = strict_strtol(rank_str.c_str(), 10, &rank_err);
-    if (!rank_err.empty()) {
-        derr << "Bad rank '" << rank_str << "'" << dendl;
-        usage();
-    }
-  }
 
   // RADOS init
   // ==========
@@ -80,13 +66,26 @@ int TableTool::main(std::vector<const char*> &argv)
   r = rados.ioctx_create(pool_name.c_str(), io);
   assert(r == 0);
 
-  // Require 2 args <action> <table>
-  if (argv.size() < 2) {
+  // Require at least 3 args <action> <table> <rank>
+  if (argv.size() < 3) {
     usage();
     return -EINVAL;
   }
-  const std::string mode = std::string(argv[0]);
-  const std::string table = std::string(argv[1]);
+
+  const std::string rank_str = std::string(argv[0]);
+  const std::string mode = std::string(argv[1]);
+  const std::string table = std::string(argv[2]);
+
+  if (rank_str == "all") {
+    rank = MDS_RANK_NONE;
+  } else {
+    std::string rank_err;
+    rank = strict_strtol(rank_str.c_str(), 10, &rank_err);
+    if (!rank_err.empty()) {
+      derr << "Bad rank '" << rank_str << "'" << dendl;
+      usage();
+    }
+  }
 
   if (mode == "reset") {
     if (table == "session") {
