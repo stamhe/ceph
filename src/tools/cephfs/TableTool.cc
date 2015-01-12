@@ -183,6 +183,7 @@ private:
 
 public:
   TableHandler(mds_rank_t rank, std::string const &name, bool mds_table_)
+    : mds_table(mds_table_)
   {
     // Compose object name of the table we will dump
     std::ostringstream oss;
@@ -192,7 +193,6 @@ public:
     }
     oss << "_" << name;
     object_name = oss.str();
-    mds_table = mds_table_;
   }
 
   int load_and_dump(librados::IoCtx *io, Formatter *f)
