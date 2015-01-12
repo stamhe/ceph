@@ -202,7 +202,7 @@ public:
 
     // Attempt read
     bufferlist table_bl;
-    int read_r = io->read(object_name, table_bl, (1<<22), 0);
+    int read_r = io->read(object_name, table_bl, 0, 0);
     if (read_r >= 0) {
       bufferlist::iterator q = table_bl.begin();
       try {
