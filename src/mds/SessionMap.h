@@ -81,8 +81,6 @@ private:
   uint64_t state_seq;
   int importing_count;
   friend class SessionMap;
-  friend class SessionMapStore;
-
 
   // Human (friendly) name is soft state generated from client metadata
   void _update_human_name();
@@ -90,6 +88,14 @@ private:
 
 public:
 
+  inline int get_state() const {return state;}
+  void set_state(int new_state)
+  {
+    if (state != new_state) {
+      state = new_state;
+      state_seq++;
+    }
+  }
   void decode(bufferlist::iterator &p);
   void set_client_metadata(std::map<std::string, std::string> const &meta);
   std::string get_human_name() const {return human_name;}
@@ -265,11 +271,10 @@ protected:
     mds_rank_t rank;
 public:
   ceph::unordered_map<entity_name_t, Session*> session_map;
-  map<int,xlist<Session*>* > by_state;
   version_t version;
 
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& blp);
+  virtual void encode(bufferlist& bl) const;
+  virtual void decode(bufferlist::iterator& blp);
   void dump(Formatter *f) const;
 
   Session* get_or_add_session(const entity_inst_t& i) {
@@ -285,26 +290,15 @@ public:
     return s;
   }
 
-  uint64_t set_state(Session *session, int s) {
-    if (session->state != s) {
-      session->state = s;
-      session->state_seq++;
-      if (by_state.count(s) == 0)
-	by_state[s] = new xlist<Session*>;
-      by_state[s]->push_back(&session->item_session_list);
-    }
-    return session->state_seq;
-  }
-
   static void generate_test_instances(list<SessionMapStore*>& ls);
 
   void reset_state()
   {
     session_map.clear();
-    by_state.clear();
   }
 
   SessionMapStore() : rank(MDS_RANK_NONE), version(0) {}
+  virtual ~SessionMapStore() {};
 };
 
 class SessionMap : public SessionMapStore {
@@ -313,6 +307,8 @@ public:
   
 public:  // i am lazy
   version_t projected, committing, committed;
+  map<int,xlist<Session*>* > by_state;
+  uint64_t set_state(Session *session, int state);
   map<version_t, list<MDSInternalContextBase*> > commit_waiters;
 
   SessionMap(MDS *m) : mds(m),
@@ -320,6 +316,7 @@ public:  // i am lazy
   { }
 
   // sessions
+  void decode(bufferlist::iterator& blp);
   bool empty() { return session_map.empty(); }
   const ceph::unordered_map<entity_name_t, Session*> &get_sessions() const
   {

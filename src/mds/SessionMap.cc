@@ -186,6 +186,34 @@ void SessionMapStore::encode(bufferlist& bl) const
   ENCODE_FINISH(bl);
 }
 
+/**
+ * Deserialize sessions, and update by_state index
+ */
+void SessionMap::decode(bufferlist::iterator &p)
+{
+  // Populate `sessions`
+  SessionMapStore::decode(p);
+
+  // Update `by_state`
+  for (ceph::unordered_map<entity_name_t, Session*>::iterator i = session_map.begin();
+       i != session_map.end(); ++i) {
+    Session *s = i->second;
+    if (by_state.count(s->get_state()) == 0)
+      by_state[s->get_state()] = new xlist<Session*>;
+    by_state[s->get_state()]->push_back(&s->item_session_list);
+  }
+}
+
+uint64_t SessionMap::set_state(Session *session, int s) {
+  if (session->state != s) {
+    session->set_state(s);
+    if (by_state.count(s) == 0)
+      by_state[s] = new xlist<Session*>;
+    by_state[s]->push_back(&session->item_session_list);
+  }
+  return session->get_state_seq();
+}
+
 void SessionMapStore::decode(bufferlist::iterator& p)
 {
   utime_t now = ceph_clock_now(g_ceph_context);
@@ -202,7 +230,7 @@ void SessionMapStore::decode(bufferlist::iterator& p)
       ::decode(inst.name, p);
       Session *s = get_or_add_session(inst);
       if (s->is_closed())
-	set_state(s, Session::STATE_OPEN);
+        s->set_state(Session::STATE_OPEN);
       s->decode(p);
     }
 
@@ -230,7 +258,7 @@ void SessionMapStore::decode(bufferlist::iterator& p)
       } else {
 	session_map[s->info.inst.name] = s;
       }
-      set_state(s, Session::STATE_OPEN);
+      s->set_state(Session::STATE_OPEN);
       s->last_cap_renew = now;
     }
   }
