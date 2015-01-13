@@ -267,24 +267,19 @@ class MDS;
  * encode/decode outside of live MDS instance.
  */
 class SessionMapStore {
-protected:
-  /**
-   * Advisory, for use in logging, not logic.
-   *
-   * Override in SessionMap to get real rank for debug messages
-   */
-  virtual mds_rank_t get_rank() const
-  {
-    return MDS_RANK_NONE;
-  }
-
 public:
   ceph::unordered_map<entity_name_t, Session*> session_map;
   version_t version;
+  mds_rank_t rank;
 
   virtual void encode(bufferlist& bl) const;
   virtual void decode(bufferlist::iterator& blp);
   void dump(Formatter *f) const;
+
+  void set_rank(mds_rank_t r)
+  {
+    rank = r;
+  }
 
   Session* get_or_add_session(const entity_inst_t& i) {
     Session *s;
@@ -306,15 +301,13 @@ public:
     session_map.clear();
   }
 
-  SessionMapStore() : version(0) {}
+  SessionMapStore() : version(0), rank(MDS_RANK_NONE) {}
   virtual ~SessionMapStore() {};
 };
 
 class SessionMap : public SessionMapStore {
 public:
   MDS *mds;
-  
-  mds_rank_t get_rank() const;
 
 public:  // i am lazy
   version_t projected, committing, committed;
