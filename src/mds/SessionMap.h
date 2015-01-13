@@ -268,7 +268,16 @@ class MDS;
  */
 class SessionMapStore {
 protected:
-    mds_rank_t rank;
+  /**
+   * Advisory, for use in logging, not logic.
+   *
+   * Override in SessionMap to get real rank for debug messages
+   */
+  virtual mds_rank_t get_rank() const
+  {
+    return MDS_RANK_NONE;
+  }
+
 public:
   ceph::unordered_map<entity_name_t, Session*> session_map;
   version_t version;
@@ -297,7 +306,7 @@ public:
     session_map.clear();
   }
 
-  SessionMapStore() : rank(MDS_RANK_NONE), version(0) {}
+  SessionMapStore() : version(0) {}
   virtual ~SessionMapStore() {};
 };
 
@@ -305,6 +314,8 @@ class SessionMap : public SessionMapStore {
 public:
   MDS *mds;
   
+  mds_rank_t get_rank() const;
+
 public:  // i am lazy
   version_t projected, committing, committed;
   map<int,xlist<Session*>* > by_state;

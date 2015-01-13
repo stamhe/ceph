@@ -25,7 +25,7 @@
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
-#define dout_prefix *_dout << "mds." << rank << ".sessionmap "
+#define dout_prefix *_dout << "mds." << get_rank() << ".sessionmap "
 
 
 class SessionMapIOContext : public MDSIOContextBase
@@ -79,8 +79,6 @@ public:
 void SessionMap::load(MDSInternalContextBase *onload)
 {
   dout(10) << "load" << dendl;
-
-  rank = mds->whoami;
 
   if (onload)
     waiting_for_load.push_back(onload);
@@ -450,3 +448,9 @@ void Session::decode(bufferlist::iterator &p)
 
   _update_human_name();
 }
+
+mds_rank_t SessionMap::get_rank() const
+{
+  return mds->whoami;
+}
+
