@@ -87,21 +87,20 @@ int TableTool::main(std::vector<const char*> &argv)
     }
   }
 
+  JSONFormatter jf(true);
   if (mode == "reset") {
     if (table == "session") {
-      return apply_rank_fn(&TableTool::_reset_session_table, NULL);
+      r = apply_rank_fn(&TableTool::_reset_session_table, &jf);
     } else if (table == "inode") {
-      return apply_rank_fn(&TableTool::_reset_ino_table, NULL);
+      r = apply_rank_fn(&TableTool::_reset_ino_table, &jf);
     } else if (table == "snap") {
-      return _reset_snap_table();
+      r = _reset_snap_table(&jf);
     } else {
       derr << "Invalid table '" << table << "'" << dendl;
       usage();
       return -EINVAL;
     }
   } else if (mode == "show") {
-    JSONFormatter jf(true);
-    jf.open_object_section("ranks");
     if (table == "session") {
       r = apply_rank_fn(&TableTool::_show_session_table, &jf);
     } else if (table == "inode") {
@@ -113,17 +112,16 @@ int TableTool::main(std::vector<const char*> &argv)
       usage();
       return -EINVAL;
     }
-    jf.close_section();
-
-    // Subcommand should have written to formatter, flush it
-    jf.flush(std::cout);
-    std::cout << std::endl;
-    return r;
   } else {
     derr << "Invalid mode '" << mode << "'" << dendl;
     usage();
     return -EINVAL;
   }
+
+  // Subcommand should have written to formatter, flush it
+  jf.flush(std::cout);
+  std::cout << std::endl;
+  return r;
 }
 
 
@@ -139,6 +137,8 @@ int TableTool::main(std::vector<const char*> &argv)
  */
 int TableTool::apply_rank_fn(int (TableTool::*fptr) (mds_rank_t, Formatter*), Formatter *f)
 {
+  assert(f != NULL);
+
   int r = 0;
   std::set<mds_rank_t> apply_to_ranks;
   if (rank == MDS_RANK_NONE) {
@@ -147,19 +147,24 @@ int TableTool::apply_rank_fn(int (TableTool::*fptr) (mds_rank_t, Formatter*), Fo
     apply_to_ranks.insert(rank);
   }
 
+  f->open_object_section("ranks");
+
   for (std::set<mds_rank_t>::iterator rank_i = apply_to_ranks.begin();
       rank_i != apply_to_ranks.end(); ++rank_i) {
-    if (f) {
-      std::ostringstream rank_str;
-      rank_str << *rank_i;
-      f->open_object_section(rank_str.str().c_str());
-    }
+    std::ostringstream rank_str;
+    rank_str << *rank_i;
+    f->open_object_section(rank_str.str().c_str());
+
+    f->open_object_section("data");
     int rank_r = (this->*fptr)(*rank_i, f);
+    f->close_section();
     r = r ? r : rank_r;
-    if (f) {
-      f->close_section();
-    }
+
+    f->dump_int("result", rank_r);
+    f->close_section();
   }
+
+  f->close_section();
 
   return r;
 }
@@ -177,12 +182,15 @@ private:
   // The RADOS object ID for the table
   std::string object_name;
 
+  // The rank in question (may be NONE)
+  mds_rank_t rank;
+
   // Whether this is an MDSTable subclass (i.e. has leading version field to decode)
   bool mds_table;
 
 public:
-  TableHandler(mds_rank_t rank, std::string const &name, bool mds_table_)
-    : mds_table(mds_table_)
+  TableHandler(mds_rank_t r, std::string const &name, bool mds_table_)
+    : rank(r), mds_table(mds_table_)
   {
     // Compose object name of the table we will dump
     std::ostringstream oss;
@@ -211,6 +219,7 @@ public:
           f->dump_int("version", version);
         }
         A table_inst;
+        table_inst.set_rank(rank);
         table_inst.decode(q);
         table_inst.dump(f);
 
@@ -229,10 +238,15 @@ public:
   int reset(librados::IoCtx *io)
   {
     A table_inst;
+    table_inst.set_rank(rank);
     table_inst.reset_state();
     
     // Compose new (blank) table
     bufferlist new_bl;
+    if (mds_table) {
+      version_t version = 1;
+      ::encode(version, new_bl);
+    }
     table_inst.encode(new_bl);
 
     // Write out new table
@@ -269,11 +283,24 @@ int TableTool::_reset_ino_table(mds_rank_t rank, Formatter *f)
 
 int TableTool::_show_snap_table(Formatter *f)
 {
-  return TableHandler<SnapServer>(MDS_RANK_NONE, "snaptable", true).load_and_dump(&io, f);
+  int r;
+
+  f->open_object_section("show_snap_table");
+  {
+    r = TableHandler<SnapServer>(MDS_RANK_NONE, "snaptable", true).load_and_dump(&io, f);
+    f->dump_int("result", r);
+  }
+  f->close_section();
+
+  return r;
 }
 
-int TableTool::_reset_snap_table()
+int TableTool::_reset_snap_table(Formatter *f)
 {
-  return TableHandler<SnapServer>(MDS_RANK_NONE, "snaptable", true).reset(&io);
+  int r = TableHandler<SnapServer>(MDS_RANK_NONE, "snaptable", true).reset(&io);
+  f->open_object_section("reset_snap_status");
+  f->dump_int("result", r);
+  f->close_section();
+  return r;
 }
 

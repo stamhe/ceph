@@ -39,7 +39,7 @@ class TableTool : public MDSUtility
     int _reset_ino_table(mds_rank_t rank, Formatter *f);
 
     int _show_snap_table(Formatter *f);
-    int _reset_snap_table();
+    int _reset_snap_table(Formatter *f);
 
   public:
     void usage();
